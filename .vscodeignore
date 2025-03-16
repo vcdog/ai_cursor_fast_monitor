@@ -1,0 +1,47 @@
+# 源代码（已打包到dist目录）
+src/**
+!src/assets/**
+
+# 开发配置文件
+.vscode/**
+.vscode-test/**
+.gitignore
+.yarnrc
+.editorconfig
+.eslintrc.json
+.prettierrc
+tsconfig.json
+webpack.config.js
+babel.config.js
+jest.config.js
+.github/**
+
+# 测试文件
+test/**
+**/*.test.js
+**/*.spec.js
+coverage/**
+
+# 文档和示例
+docs/**
+examples/**
+*.md
+!README.md
+!CHANGELOG.md
+
+# 构建过程文件
+node_modules/**
+out/**
+.nyc_output/**
+yarn-error.log
+npm-debug.log
+**/*.vsix
+
+# 其他不需要的文件
+**/.DS_Store
+**/.git
+**/.github
+**/.vscode
+**/*.map
+**/*.ts
+!**/*.d.ts 

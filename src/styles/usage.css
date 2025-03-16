@@ -1,0 +1,10 @@
+.progress-fill.infinite {
+  background: linear-gradient(90deg, #4CAF50, #8BC34A);
+  box-shadow: 0 0 5px rgba(76, 175, 80, 0.5);
+}
+
+/* 为无限额度添加特殊标记 */
+.usage-text .infinite-symbol {
+  font-size: 1.2em;
+  font-weight: bold;
+} 

@@ -1,0 +1,61 @@
+.account-info-container {
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.account-info-header {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #333;
+}
+
+.account-info-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.account-info-item {
+  display: flex;
+  align-items: center;
+}
+
+.account-info-label {
+  font-weight: 500;
+  width: 100px;
+  color: #555;
+}
+
+.account-info-value {
+  color: #333;
+}
+
+.account-type-premium {
+  color: #4CAF50;
+  font-weight: 600;
+}
+
+.account-type-pro {
+  color: #2196F3;
+  font-weight: 600;
+}
+
+.account-type-team {
+  color: #9C27B0;
+  font-weight: 600;
+}
+
+.account-type-enterprise {
+  color: #F44336;
+  font-weight: 600;
+}
+
+.account-info-loading {
+  padding: 16px;
+  text-align: center;
+  color: #666;
+} 
