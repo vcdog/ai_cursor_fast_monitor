@@ -2,6 +2,31 @@ const vscode = require('vscode');
 const axios = require('axios');
 
 /**
+ * 检查配置是否完整
+ */
+async function checkConfiguration() {
+  const config = vscode.workspace.getConfiguration('cursor-usage-monitor');
+  const userId = config.get('userId');
+  const cookieString = config.get('cookieString');
+  
+  if (!userId || !cookieString) {
+    const setNowAction = '立即设置';
+    const response = await vscode.window.showWarningMessage(
+      '您需要配置 Cursor 的用户ID和Cookie才能使用此扩展。',
+      setNowAction
+    );
+    
+    if (response === setNowAction) {
+      vscode.commands.executeCommand('workbench.action.openSettings', 'cursor-usage-monitor');
+    }
+    
+    return false;
+  }
+  
+  return true;
+}
+
+/**
  * 激活使用量监控功能
  * @param {vscode.ExtensionContext} context 
  */
@@ -9,14 +34,19 @@ function activateUsageMonitor(context) {
   // 注册命令
   const checkUsageCmd = vscode.commands.registerCommand('cursor-usage-monitor.checkUsage', checkUsage);
   const showUsageCmd = vscode.commands.registerCommand('cursor-usage-monitor.showUsage', showUsageDetails);
+  const setConfigCmd = vscode.commands.registerCommand('cursor-usage-monitor.setDefaultConfig', setDefaultUserConfig);
   
-  context.subscriptions.push(checkUsageCmd, showUsageCmd);
+  context.subscriptions.push(checkUsageCmd, showUsageCmd, setConfigCmd);
   
   // 设置状态栏项
   setupStatusBarItem(context);
   
-  // 初始检查
-  checkUsage();
+  // 检查配置或提供默认值
+  setDefaultUserConfig().then(configOk => {
+    if (configOk) {
+      checkUsage();
+    }
+  });
   
   // 设置定时检查
   setupIntervalCheck();
@@ -76,15 +106,60 @@ async function checkUsage() {
 async function fetchUsageData() {
   const config = vscode.workspace.getConfiguration('cursor-usage-monitor');
   const userId = config.get('userId');
+  const cookieString = config.get('cookieString');
   
   if (!userId) {
+    vscode.window.showWarningMessage('未配置用户ID，请在设置中配置');
     throw new Error('未配置用户ID');
   }
   
-  const url = `https://cursor.com/api/usage?user=${userId}`;
+  // 添加日志，帮助调试
+  console.log(`开始获取用户 ${userId} 的使用情况数据`);
   
-  const response = await axios.get(url);
-  return response.data;
+  try {
+    // 基本 URL
+    const url = `https://cursor.com/api/user/${userId}/usage`;
+    
+    // 构建请求头
+    const headers = {};
+    
+    // 如果有 Cookie 则添加到请求头
+    if (cookieString) {
+      headers['Cookie'] = cookieString;
+    }
+    
+    console.log(`发送请求到: ${url}`);
+    const response = await axios.get(url, { headers });
+    
+    console.log('成功获取使用情况数据');
+    
+    // 检查响应格式
+    if (!response.data) {
+      throw new Error('API 响应数据为空');
+    }
+    
+    return response.data;
+  } catch (error) {
+    console.error('获取使用情况数据失败:', error.message);
+    
+    // 尝试备用 API
+    try {
+      console.log('尝试使用备用 API...');
+      const backupUrl = `https://cursor.com/api/usage?user=${userId}`;
+      
+      const headers = {};
+      if (cookieString) {
+        headers['Cookie'] = cookieString;
+      }
+      
+      const backupResponse = await axios.get(backupUrl, { headers });
+      console.log('成功使用备用 API 获取数据');
+      return backupResponse.data;
+    } catch (backupError) {
+      console.error('备用 API 也失败:', backupError.message);
+      throw new Error(`获取数据失败: ${error.message}`);
+    }
+  }
 }
 
 /**
@@ -300,6 +375,41 @@ function getWebviewContent(usageData) {
     </body>
     </html>
   `;
+}
+
+/**
+ * 设置默认用户配置（仅用于开发测试）
+ */
+async function setDefaultUserConfig() {
+  const config = vscode.workspace.getConfiguration('cursor-usage-monitor');
+  const userId = config.get('userId');
+  const cookieString = config.get('cookieString');
+  
+  // 如果用户尚未配置，提供使用默认值的选项
+  if (!userId || !cookieString) {
+    const useDefaultAction = '使用默认值';
+    const configManuallyAction = '手动配置';
+    
+    const response = await vscode.window.showInformationMessage(
+      '您尚未配置Cursor的用户ID和Cookie。要使用默认测试值吗？',
+      useDefaultAction,
+      configManuallyAction
+    );
+    
+    if (response === useDefaultAction) {
+      // 使用提供的默认值
+      await config.update('userId', 'user_01JP4J5TVVNHKYT0M99SPC2G6J', vscode.ConfigurationTarget.Global);
+      await config.update('cookieString', 'WorkosCursorSessionToken=user_01JP4J5TVVNHKYT0M99SPC2G6J%3A%3AeyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhdXRoMHx1c2VyXzAxSlA0SjVUVlZOSEtZVDBNOTlTUEMyRzZKIiwidGltZSI6IjE3NDE3NjI1NjAiLCJyYW5kb21uZXNzIjoiNmMwZTNjZGEtY2UwZC00Y2JlIiwiZXhwIjo0MzMzNzYyNTYwLCJpc3MiOiJodHRwczovL2F1dGhlbnRpY2F0aW9uLmN1cnNvci5zaCIsInNjb3BlIjoib3BlbmlkIHByb2ZpbGUgZW1haWwgb2ZmbGluZV9hY2Nlc3MiLCJhdWQiOiJodHRwczovL2N1cnNvci5jb20ifQ.fjgdg1dR2_XgHhamkNZJf8xqnrx1Z8VAe6q2X7lM_gw', vscode.ConfigurationTarget.Global);
+      vscode.window.showInformationMessage('已设置默认测试值，现在可以检查用量');
+      return true;
+    } else if (response === configManuallyAction) {
+      vscode.commands.executeCommand('workbench.action.openSettings', 'cursor-usage-monitor');
+    }
+    
+    return false;
+  }
+  
+  return true;
 }
 
 module.exports = {
