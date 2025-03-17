@@ -198,12 +198,38 @@ function updateStatusBarError() {
 }
 
 /**
+ * 获取用户账号类型信息
+ */
+async function fetchAccountType() {
+  const config = vscode.workspace.getConfiguration('cursor-usage-monitor');
+  const cookieString = config.get('cookieString');
+  
+  try {
+    const response = await axios.get('https://www.cursor.com/api/auth/stripe', {
+      headers: {
+        'Cookie': cookieString
+      }
+    });
+    
+    return {
+      type: response.data.membershipType || 'unknown',
+      daysRemaining: response.data.daysRemainingOnTrial || 0
+    };
+  } catch (error) {
+    console.error('获取账号类型失败:', error);
+    return { type: 'unknown', daysRemaining: 0 };
+  }
+}
+
+/**
  * 显示使用详情
  */
 async function showUsageDetails() {
   try {
     // 获取最新数据
     const usageData = await checkUsage();
+    // 获取账号类型信息
+    const accountInfo = await fetchAccountType();
     
     if (!usageData) {
       vscode.window.showErrorMessage('无法获取Cursor使用数据');
@@ -219,7 +245,7 @@ async function showUsageDetails() {
     );
     
     // 设置HTML内容
-    panel.webview.html = getWebviewContent(usageData);
+    panel.webview.html = getWebviewContent(usageData, accountInfo);
   } catch (error) {
     console.error('显示使用详情失败:', error);
     vscode.window.showErrorMessage('显示Cursor使用详情失败: ' + error.message);
@@ -229,13 +255,26 @@ async function showUsageDetails() {
 /**
  * 生成Webview内容
  */
-function getWebviewContent(usageData) {
+function getWebviewContent(usageData, accountInfo) {
   // 获取GPT-4数据
   const gpt4 = usageData['gpt-4'] || {};
   const gpt4Used = gpt4.numRequests || 0;
   const gpt4Total = gpt4.maxRequestUsage || 150;
   const gpt4Tokens = gpt4.numTokens || 0;
   const gpt4Percentage = gpt4Total > 0 ? Math.min((gpt4Used / gpt4Total) * 100, 100) : 0;
+  
+  // 确定GPT-4进度条颜色类
+  let gpt4ColorClass = '';
+  if (gpt4Percentage > 85) {
+    gpt4ColorClass = 'danger';
+  } else if (gpt4Percentage > 50) {
+    gpt4ColorClass = 'warning';
+  } else {
+    gpt4ColorClass = 'success';
+  }
+  
+  // 确定账户状态样式
+  const isLowDaysRemaining = accountInfo.type === 'free_trial' && accountInfo.daysRemaining <= 3;
   
   // 获取GPT-3.5-turbo数据
   const gpt35 = usageData['gpt-3.5-turbo'] || {};
@@ -258,6 +297,22 @@ function getWebviewContent(usageData) {
   resetDate.setMonth(resetDate.getMonth() + 1);
   const resetDateStr = resetDate.toISOString().split('T')[0];
   
+  // 格式化账号类型显示
+  let accountTypeDisplay = '';
+  switch(accountInfo.type) {
+    case 'free_trial':
+      accountTypeDisplay = `免费用户 【剩余 ${accountInfo.daysRemaining} 天】`;
+      break;
+    case 'pro':
+      accountTypeDisplay = '会员用户';
+      break;
+    case 'team':
+      accountTypeDisplay = '商业用户';
+      break;
+    default:
+      accountTypeDisplay = '未知';
+  }
+  
   return `
     <!DOCTYPE html>
     <html lang="zh-CN">
@@ -268,68 +323,157 @@ function getWebviewContent(usageData) {
       <style>
         body {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-          padding: 20px;
+          padding: 2rem;
           color: var(--vscode-foreground);
           background-color: var(--vscode-editor-background);
+          max-width: 800px;
+          margin: 0 auto;
         }
         h1 {
           font-size: 24px;
-          margin-bottom: 20px;
+          margin: 0;
           color: var(--vscode-editor-foreground);
         }
         .usage-container {
           background-color: var(--vscode-editor-inactiveSelectionBackground);
-          border-radius: 8px;
-          padding: 16px;
-          margin-bottom: 20px;
+          border-radius: 10px;
+          padding: 1.5rem;
+          margin-bottom: 1.5rem;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .usage-container:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
         .usage-title {
           font-size: 18px;
           font-weight: 600;
-          margin-bottom: 12px;
+          margin-bottom: 1rem;
+          display: flex;
+          align-items: center;
+        }
+        .usage-title::before {
+          content: "";
+          display: inline-block;
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          margin-right: 8px;
+        }
+        .gpt4-title::before {
+          background-color: #4e8eda;
+        }
+        .gpt35-title::before {
+          background-color: #4caf50;
+        }
+        .gpt32k-title::before {
+          background-color: #9c27b0;
         }
         .progress-bar {
-          height: 20px;
+          height: 10px;
           background-color: var(--vscode-input-background);
           border-radius: 10px;
           overflow: hidden;
-          margin-bottom: 8px;
+          margin-bottom: 12px;
+          box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
         }
         .progress-fill {
           height: 100%;
-          background-color: var(--vscode-progressBar-background);
+          background: linear-gradient(90deg, var(--vscode-progressBar-background) 0%, var(--vscode-statusBarItem-prominentBackground, #0078d4) 100%);
           border-radius: 10px;
-          transition: width 0.3s ease;
+          transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .progress-fill.success {
+          background: linear-gradient(90deg, #4CAF50, #8BC34A);
+        }
+        .progress-fill.warning {
+          background: linear-gradient(90deg, #FFC107, #FF9800);
+        }
+        .progress-fill.danger {
+          background: linear-gradient(90deg, #F44336, #E91E63);
         }
         .progress-fill.unlimited {
-          background: linear-gradient(90deg, #4CAF50, #8BC34A);
+          background: linear-gradient(90deg, #4CAF50, #8BC34A, #CDDC39);
+          background-size: 200% 100%;
+          animation: gradient-shift 3s ease infinite;
+        }
+        @keyframes gradient-shift {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
         }
         .usage-details {
           display: flex;
           justify-content: space-between;
           margin-top: 8px;
+          font-size: 14px;
+          color: var(--vscode-descriptionForeground);
         }
         .tokens-info {
           margin-top: 8px;
-          color: var(--vscode-descriptionForeground);
+          font-size: 12px;
+          opacity: 0.8;
+          font-style: italic;
         }
         .reset-info {
-          margin-top: 20px;
+          margin-top: 2rem;
+          padding-top: 1rem;
           color: var(--vscode-descriptionForeground);
+          border-top: 1px solid var(--vscode-panel-border);
+          font-size: 13px;
+          display: flex;
+          justify-content: space-between;
+          flex-wrap: wrap;
         }
         .infinite-symbol {
           font-size: 1.2em;
           font-weight: bold;
+          color: var(--vscode-symbolIcon-classForeground, #4caf50);
+        }
+        .header-container {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 1.5rem;
+          padding-bottom: 1rem;
+          border-bottom: 1px solid var(--vscode-panel-border);
+        }
+        .account-type {
+          font-size: 18px;
+          padding: 8px 12px;
+          border-radius: 10px;
+          background-color: var(--vscode-editor-inactiveSelectionBackground);
+          color: var(--vscode-badge-foreground);
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        .account-type:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        .account-type.warning {
+          color: #F44336;
+          animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+          0% { opacity: 1; }
+          50% { opacity: 0.7; }
+          100% { opacity: 1; }
         }
       </style>
     </head>
     <body>
-      <h1>Cursor用量详情</h1>
+      <div class="header-container">
+        <h1>Cursor用量详情</h1>
+        <span class="account-type ${isLowDaysRemaining ? 'warning' : ''}">${accountTypeDisplay}</span>
+      </div>
       
       <div class="usage-container">
-        <div class="usage-title">Premium模型使用量 (GPT-4)</div>
+        <div class="usage-title gpt4-title">Premium模型使用量 (GPT-4)</div>
         <div class="progress-bar">
-          <div class="progress-fill" style="width: ${gpt4Percentage}%"></div>
+          <div class="progress-fill ${gpt4ColorClass}" style="width: ${gpt4Percentage}%"></div>
         </div>
         <div class="usage-details">
           <span>已使用: ${gpt4Used}</span>
@@ -341,7 +485,7 @@ function getWebviewContent(usageData) {
       </div>
       
       <div class="usage-container">
-        <div class="usage-title">无限额请求使用量 (GPT-3.5-Turbo)</div>
+        <div class="usage-title gpt35-title">无限额请求使用量 (GPT-3.5-Turbo)</div>
         <div class="progress-bar">
           <div class="progress-fill ${isUnlimited ? 'unlimited' : ''}" style="width: ${gpt35Percentage}%"></div>
         </div>
@@ -355,7 +499,7 @@ function getWebviewContent(usageData) {
       </div>
       
       <div class="usage-container">
-        <div class="usage-title">GPT-4-32K使用量</div>
+        <div class="usage-title gpt32k-title">GPT-4-32K使用量</div>
         <div class="progress-bar">
           <div class="progress-fill" style="width: ${gpt432kPercentage}%"></div>
         </div>
@@ -369,8 +513,8 @@ function getWebviewContent(usageData) {
       </div>
       
       <div class="reset-info">
-        <p>下次重置日期: ${resetDateStr}</p>
-        <p>最后更新时间: ${new Date().toLocaleString('zh-CN')}</p>
+        <div>下次重置日期: ${resetDateStr}</div>
+        <div>最后更新时间: ${new Date().toLocaleString('zh-CN')}</div>
       </div>
     </body>
     </html>
