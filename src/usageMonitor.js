@@ -66,7 +66,7 @@ function setupStatusBarItem(context) {
   context.subscriptions.push(statusBarItem);
   
   // 保存到全局，以便更新
-  global.cursorStatusBarItem = statusBarItem;
+  global.cursorStatusBarItem = statusItem;
 }
 
 /**
@@ -174,13 +174,27 @@ function updateStatusBar(usageData) {
     const used = gpt4Data.numRequests || 0;
     const total = gpt4Data.maxRequestUsage || 150;
     
+    // 计算使用百分比
+    const percentage = total > 0 ? Math.min((used / total) * 100, 100) : 0;
+    
+    // 确定状态图标和颜色标识
+    let statusIcon = '🟢';
+    let statusText = '良好';
+    if (percentage > 85) {
+      statusIcon = '🔴';
+      statusText = '危险';
+    } else if (percentage > 50) {
+      statusIcon = '🟡';
+      statusText = '警告';
+    }
+    
     // 获取GPT-3.5-turbo使用情况
     const gpt35Data = usageData['gpt-3.5-turbo'] || {};
     const turboUsed = gpt35Data.numRequests || 0;
     
     // 更新状态栏
     global.cursorStatusBarItem.text = `$(pulse) Cursor: ${used}/${total} | Turbo: ${turboUsed}`;
-    global.cursorStatusBarItem.tooltip = `Cursor API 使用情况\nGPT-4: ${used}/${total}\nGPT-3.5-Turbo: ${turboUsed}`;
+    global.cursorStatusBarItem.tooltip = `Cursor API 使用情况\nGPT-4: ${used}/${total} | ${percentage.toFixed(1)}% ${statusIcon} ${statusText}\nGPT-3.5-Turbo: ${turboUsed}`;
   } catch (error) {
     console.error('更新状态栏失败:', error);
     updateStatusBarError();
@@ -299,9 +313,11 @@ function getWebviewContent(usageData, accountInfo) {
   
   // 格式化账号类型显示
   let accountTypeDisplay = '';
+  let remainingDaysDisplay = '';
   switch(accountInfo.type) {
     case 'free_trial':
-      accountTypeDisplay = `免费用户 【剩余 ${accountInfo.daysRemaining} 天】`;
+      accountTypeDisplay = '免费用户';
+      remainingDaysDisplay = `【剩余 ${accountInfo.daysRemaining} 天】`;
       break;
     case 'pro':
       accountTypeDisplay = '会员用户';
@@ -453,9 +469,19 @@ function getWebviewContent(usageData, accountInfo) {
           transform: translateY(-2px);
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
+        .account-type .user-type {
+          font-weight: bold;
+          color: #000000;
+        }
+        .account-type .days-remaining {
+          margin-left: 6px;
+        }
         .account-type.warning {
           color: #F44336;
           animation: pulse 1.5s infinite;
+        }
+        .account-type.warning .user-type {
+          color: #000000;
         }
         @keyframes pulse {
           0% { opacity: 1; }
@@ -467,7 +493,10 @@ function getWebviewContent(usageData, accountInfo) {
     <body>
       <div class="header-container">
         <h1>Cursor用量详情</h1>
-        <span class="account-type ${isLowDaysRemaining ? 'warning' : ''}">${accountTypeDisplay}</span>
+        <span class="account-type ${isLowDaysRemaining ? 'warning' : ''}">
+          <span class="user-type">${accountTypeDisplay}</span>
+          ${remainingDaysDisplay ? `<span class="days-remaining">${remainingDaysDisplay}</span>` : ''}
+        </span>
       </div>
       
       <div class="usage-container">
