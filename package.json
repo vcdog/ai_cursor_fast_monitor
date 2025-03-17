@@ -2,14 +2,14 @@
   "name": "cursor-usage-monitor",
   "displayName": "Cursor Usage Monitor",
   "description": "Monitor your Cursor AI usage",
-  "version": "0.0.1",
-  "publisher": "your-publisher-name",
+  "version": "0.0.7",
+  "publisher": "vcdog",
   "author": {
-    "name": "Your Name"
+    "name": "HiJenkoo"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/cursor-usage-monitor"
+    "url": "https://github.com/vcdog/cursor-usage-monitor"
   },
   "engines": {
     "vscode": "^1.60.0"
