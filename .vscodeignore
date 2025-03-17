@@ -44,4 +44,5 @@ npm-debug.log
 **/.vscode
 **/*.map
 **/*.ts
-!**/*.d.ts 
+!**/*.d.ts
+!images/icon.png  # 确保图标被包含在扩展中 

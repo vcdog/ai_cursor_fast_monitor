@@ -1,9 +1,10 @@
 {
   "name": "cursor-usage-monitor",
-  "displayName": "Cursor Usage Monitor",
-  "description": "Monitor your Cursor AI usage",
-  "version": "0.0.7",
+  "displayName": "Cursor用量监控",
+  "description": "监控您的 Cursor AI 使用情况",
+  "version": "0.0.11",
   "publisher": "vcdog",
+  "icon": "images/icon.png",
   "author": {
     "name": "HiJenkoo"
   },
@@ -15,7 +16,9 @@
     "vscode": "^1.60.0"
   },
   "categories": [
-    "Other"
+    "Other",
+    "Visualization",
+    "Programming Languages"
   ],
   "activationEvents": [
     "onStartupFinished"
@@ -58,6 +61,7 @@
     "compile": "webpack",
     "watch": "webpack --watch",
     "package": "webpack --mode production --devtool hidden-source-map",
+    "process-icon": "node scripts/process-icon.js",
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
@@ -81,6 +85,7 @@
     "css-loader": "^6.11.0",
     "eslint": "^8.2.0",
     "jest": "^27.3.1",
+    "sharp": "^0.33.5",
     "style-loader": "^3.3.4",
     "terser-webpack-plugin": "^5.3.14",
     "webpack": "^5.98.0",
@@ -91,6 +96,23 @@
     "cursor",
     "api",
     "usage",
-    "monitor"
+    "monitor",
+    "用量",
+    "用量监控",
+    "监控",
+    "Cursor用量",
+    "Cursor监控",
+    "Cursor使用情况"
+  ],
+  "galleryBanner": {
+    "color": "#FFFFFF",
+    "theme": "light"
+  },
+  "badges": [
+    {
+      "url": "https://img.shields.io/badge/Cursor-用量监控-blue",
+      "href": "https://marketplace.visualstudio.com/items?itemName=vcdog.cursor-usage-monitor",
+      "description": "Cursor用量监控"
+    }
   ]
 }
