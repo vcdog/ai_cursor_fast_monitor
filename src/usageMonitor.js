@@ -66,7 +66,7 @@ function setupStatusBarItem(context) {
   context.subscriptions.push(statusBarItem);
   
   // 保存到全局，以便更新
-  global.cursorStatusBarItem = statusItem;
+  global.cursorStatusBarItem = statusBarItem;
 }
 
 /**
@@ -174,27 +174,13 @@ function updateStatusBar(usageData) {
     const used = gpt4Data.numRequests || 0;
     const total = gpt4Data.maxRequestUsage || 150;
     
-    // 计算使用百分比
-    const percentage = total > 0 ? Math.min((used / total) * 100, 100) : 0;
-    
-    // 确定状态图标和颜色标识
-    let statusIcon = '🟢';
-    let statusText = '良好';
-    if (percentage > 85) {
-      statusIcon = '🔴';
-      statusText = '危险';
-    } else if (percentage > 50) {
-      statusIcon = '🟡';
-      statusText = '警告';
-    }
-    
     // 获取GPT-3.5-turbo使用情况
     const gpt35Data = usageData['gpt-3.5-turbo'] || {};
     const turboUsed = gpt35Data.numRequests || 0;
     
     // 更新状态栏
     global.cursorStatusBarItem.text = `$(pulse) Cursor: ${used}/${total} | Turbo: ${turboUsed}`;
-    global.cursorStatusBarItem.tooltip = `Cursor API 使用情况\nGPT-4: ${used}/${total} | ${percentage.toFixed(1)}% ${statusIcon} ${statusText}\nGPT-3.5-Turbo: ${turboUsed}`;
+    global.cursorStatusBarItem.tooltip = `Cursor API 使用情况\nGPT-4: ${used}/${total}\nGPT-3.5-Turbo: ${turboUsed}`;
   } catch (error) {
     console.error('更新状态栏失败:', error);
     updateStatusBarError();
