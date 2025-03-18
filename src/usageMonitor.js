@@ -166,25 +166,40 @@ async function fetchUsageData() {
  * 更新状态栏
  */
 function updateStatusBar(usageData) {
-  if (!global.cursorStatusBarItem) return;
-  
-  try {
-    // 获取GPT-4使用情况
-    const gpt4Data = usageData['gpt-4'] || {};
-    const used = gpt4Data.numRequests || 0;
-    const total = gpt4Data.maxRequestUsage || 150;
-    
-    // 获取GPT-3.5-turbo使用情况
-    const gpt35Data = usageData['gpt-3.5-turbo'] || {};
-    const turboUsed = gpt35Data.numRequests || 0;
-    
-    // 更新状态栏
-    global.cursorStatusBarItem.text = `$(pulse) Cursor: ${used}/${total} | Turbo: ${turboUsed}`;
-    global.cursorStatusBarItem.tooltip = `Cursor API 使用情况\nGPT-4: ${used}/${total}\nGPT-3.5-Turbo: ${turboUsed}`;
-  } catch (error) {
-    console.error('更新状态栏失败:', error);
-    updateStatusBarError();
+  if (!global.cursorStatusBarItem) {
+    return;
   }
+  
+  // 获取GPT-4数据
+  const gpt4 = usageData['gpt-4'] || {};
+  const gpt4Used = gpt4.numRequests || 0;
+  const gpt4Total = gpt4.maxRequestUsage || 150;
+  const gpt4Percentage = gpt4Total > 0 ? Math.min((gpt4Used / gpt4Total) * 100, 100) : 0;
+  
+  // 获取GPT-3.5-turbo数据
+  const gpt35 = usageData['gpt-3.5-turbo'] || {};
+  const gpt35Used = gpt35.numRequests || 0;
+  const gpt35Total = gpt35.numRequestsTotal || gpt35Used;
+  const gpt35Tokens = gpt35.numTokens || 0;
+  const isUnlimited = gpt35.maxRequestUsage === null;
+  const gpt35Percentage = isUnlimited ? 1 : (gpt35Total > 0 ? Math.min((gpt35Used / gpt35Total) * 100, 100) : 0);
+  
+  // 根据GPT-4使用百分比确定状态栏颜色
+  let statusColor = '';
+  if (gpt4Percentage > 85) {
+    statusColor = new vscode.ThemeColor('errorForeground'); // 红色
+  } else if (gpt4Percentage > 50) {
+    statusColor = new vscode.ThemeColor('editorWarning.foreground'); // 黄色/橙色
+  } else {
+    statusColor = new vscode.ThemeColor('terminal.ansiGreen'); // 绿色
+  }
+  
+  // 更新状态栏文本
+  global.cursorStatusBarItem.text = `$(pulse) Cursor: ${gpt4Used}/${gpt4Total} | ${gpt35Used}`;
+  global.cursorStatusBarItem.color = statusColor;
+  
+  // 更新提示文本
+  global.cursorStatusBarItem.tooltip = `Cursor API 使用情况\nGPT-4: ${gpt4Used}/${gpt4Total} (${Math.round(gpt4Percentage)}%)\nGPT-3.5 Turbo: ${gpt35Used}\n点击查看详情`;
 }
 
 /**
@@ -246,6 +261,30 @@ async function showUsageDetails() {
     
     // 设置HTML内容
     panel.webview.html = getWebviewContent(usageData, accountInfo);
+    
+    // 添加消息处理
+    panel.webview.onDidReceiveMessage(
+      async message => {
+        if (message.command === 'refresh') {
+          try {
+            const newUsageData = await checkUsage();
+            const newAccountInfo = await fetchAccountType();
+            if (newUsageData) {
+              panel.webview.html = getWebviewContent(newUsageData, newAccountInfo);
+              vscode.window.showInformationMessage('Cursor用量数据已更新');
+            } else {
+              vscode.window.showErrorMessage('更新数据失败');
+            }
+          } catch (error) {
+            console.error('刷新数据时出错:', error);
+            vscode.window.showErrorMessage('刷新数据失败: ' + error.message);
+          }
+        }
+      },
+      undefined,
+      []
+    );
+
   } catch (error) {
     console.error('显示使用详情失败:', error);
     vscode.window.showErrorMessage('显示Cursor使用详情失败: ' + error.message);
@@ -282,7 +321,7 @@ function getWebviewContent(usageData, accountInfo) {
   const gpt35Total = gpt35.numRequestsTotal || gpt35Used;
   const gpt35Tokens = gpt35.numTokens || 0;
   const isUnlimited = gpt35.maxRequestUsage === null;
-  const gpt35Percentage = isUnlimited ? 0.1 : (gpt35Total > 0 ? Math.min((gpt35Used / gpt35Total) * 100, 100) : 0);
+  const gpt35Percentage = isUnlimited ? 1 : (gpt35Total > 0 ? Math.min((gpt35Used / gpt35Total) * 100, 100) : 0);
   
   // 获取GPT-4-32k数据
   const gpt432k = usageData['gpt-4-32k'] || {};
@@ -291,11 +330,24 @@ function getWebviewContent(usageData, accountInfo) {
   const gpt432kTokens = gpt432k.numTokens || 0;
   const gpt432kPercentage = gpt432kTotal > 0 ? Math.min((gpt432kUsed / gpt432kTotal) * 100, 100) : 0;
   
-  // 获取重置日期
+  // 从开始日期计算重置日期
   const startOfMonth = usageData.startOfMonth || '';
   const resetDate = startOfMonth ? new Date(startOfMonth) : new Date();
   resetDate.setMonth(resetDate.getMonth() + 1);
-  const resetDateStr = resetDate.toISOString().split('T')[0];
+  // 将日期设置为下个月的第一天的00:00:01
+  resetDate.setDate(1);
+  resetDate.setHours(0, 0, 1);
+  
+  const resetDateStr = resetDate ? 
+    resetDate.toLocaleString('zh-CN', { 
+      year: 'numeric', 
+      month: '2-digit', 
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false 
+    }).replace(/\//g, '-') : '未知';
   
   // 格式化账号类型显示
   let accountTypeDisplay = '';
@@ -328,7 +380,7 @@ function getWebviewContent(usageData, accountInfo) {
           padding: 2rem;
           color: var(--vscode-foreground);
           background-color: var(--vscode-editor-background);
-          max-width: 800px;
+          max-width: 960px;
           margin: 0 auto;
         }
         h1 {
@@ -336,24 +388,42 @@ function getWebviewContent(usageData, accountInfo) {
           margin: 0;
           color: var(--vscode-editor-foreground);
         }
+        .cards-container {
+          display: flex;
+          flex-wrap: nowrap;
+          justify-content: space-between;
+          gap: 12px;
+          margin-bottom: 1.5rem;
+        }
         .usage-container {
           background-color: var(--vscode-editor-inactiveSelectionBackground);
           border-radius: 10px;
-          padding: 1.5rem;
-          margin-bottom: 1.5rem;
+          padding: 0.8rem;
+          margin-bottom: 0;
+          width: calc(33.33% - 8px);
+          min-width: 170px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          text-align: center;
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
           transition: transform 0.2s ease, box-shadow 0.2s ease;
+          position: relative;
+          aspect-ratio: 1 / 0.85;
         }
         .usage-container:hover {
           transform: translateY(-2px);
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
         .usage-title {
-          font-size: 18px;
+          font-size: 16px;
           font-weight: 600;
-          margin-bottom: 1rem;
+          margin-bottom: 0.5rem;
           display: flex;
           align-items: center;
+          justify-content: center;
+          text-align: center;
+          height: 40px;
         }
         .usage-title::before {
           content: "";
@@ -372,49 +442,86 @@ function getWebviewContent(usageData, accountInfo) {
         .gpt32k-title::before {
           background-color: #9c27b0;
         }
-        .progress-bar {
-          height: 10px;
+        .circle-progress {
+          position: relative;
+          width: 120px;
+          height: 120px;
+          margin: 10px auto 20px;
+        }
+        .circle-bg {
+          width: 100%;
+          height: 100%;
+          border-radius: 50%;
           background-color: var(--vscode-input-background);
-          border-radius: 10px;
-          overflow: hidden;
-          margin-bottom: 12px;
           box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
         }
-        .progress-fill {
+        .circle-fill {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
           height: 100%;
-          background: linear-gradient(90deg, var(--vscode-progressBar-background) 0%, var(--vscode-statusBarItem-prominentBackground, #0078d4) 100%);
-          border-radius: 10px;
-          transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+          border-radius: 50%;
+          clip: rect(0, 120px, 120px, 60px);
+          background: conic-gradient(transparent, transparent);
+          transform: rotate(0deg);
+          transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .progress-fill.success {
-          background: linear-gradient(90deg, #4CAF50, #8BC34A);
+        .circle-fill.success {
+          background: conic-gradient(#4CAF50 0%, #8BC34A 100%, transparent 100%);
         }
-        .progress-fill.warning {
-          background: linear-gradient(90deg, #FFC107, #FF9800);
+        .circle-fill.warning {
+          background: conic-gradient(#FFC107 0%, #FF9800 100%, transparent 100%);
         }
-        .progress-fill.danger {
-          background: linear-gradient(90deg, #F44336, #E91E63);
+        .circle-fill.danger {
+          background: conic-gradient(#F44336 0%, #E91E63 100%, transparent 100%);
         }
-        .progress-fill.unlimited {
-          background: linear-gradient(90deg, #4CAF50, #8BC34A, #CDDC39);
-          background-size: 200% 100%;
-          animation: gradient-shift 3s ease infinite;
+        .circle-fill.unlimited {
+          background: conic-gradient(#4CAF50, #8BC34A, #CDDC39, #4CAF50);
+          animation: rotate 3s linear infinite;
         }
-        @keyframes gradient-shift {
-          0% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-          100% { background-position: 0% 50%; }
+        @keyframes rotate {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        .circle-mask {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          border-radius: 50%;
+          clip: rect(0, 60px, 120px, 0);
+        }
+        .circle-inner {
+          position: absolute;
+          top: 10px;
+          left: 10px;
+          width: calc(100% - 20px);
+          height: calc(100% - 20px);
+          border-radius: 50%;
+          background-color: var(--vscode-editor-background);
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+        }
+        .usage-number {
+          font-size: 20px;
+          font-weight: bold;
+        }
+        .usage-total {
+          font-size: 12px;
+          opacity: 0.8;
         }
         .usage-details {
-          display: flex;
-          justify-content: space-between;
-          margin-top: 8px;
+          margin-top: auto;
           font-size: 14px;
           color: var(--vscode-descriptionForeground);
         }
         .tokens-info {
           margin-top: 8px;
-          font-size: 12px;
+          font-size: 11px;
           opacity: 0.8;
           font-style: italic;
         }
@@ -425,8 +532,47 @@ function getWebviewContent(usageData, accountInfo) {
           border-top: 1px solid var(--vscode-panel-border);
           font-size: 13px;
           display: flex;
-          justify-content: space-between;
+          justify-content: flex-end;
           flex-wrap: wrap;
+          position: relative;
+        }
+        .dates-info {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+          gap: 6px;
+        }
+        .refresh-button {
+          position: relative;
+          left: 0;
+          margin-right: auto;
+          margin-top: 0;
+          background-color: #3B83F6;
+          color: var(--vscode-button-foreground);
+          border: none;
+          border-radius: 6px;
+          padding: 8px 16px;
+          display: flex;
+          align-items: center;
+          cursor: pointer;
+          transition: background-color 0.2s ease;
+          font-size: 15px;
+          font-weight: 500;
+          box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        .refresh-button:hover {
+          background-color: #2970E3;
+          box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+        }
+        .refresh-button svg {
+          margin-right: 6px;
+          fill: currentColor;
+        }
+        .refresh-button-icon {
+          display: inline-block;
+          width: 16px;
+          height: 16px;
+          margin-right: 6px;
         }
         .infinite-symbol {
           font-size: 1.2em;
@@ -474,6 +620,22 @@ function getWebviewContent(usageData, accountInfo) {
           50% { opacity: 0.7; }
           100% { opacity: 1; }
         }
+        @media (max-width: 768px) {
+          .cards-container {
+            flex-wrap: wrap;
+            justify-content: space-between;
+          }
+          .usage-container {
+            width: calc(50% - 6px);
+            margin-bottom: 12px;
+          }
+        }
+        @media (max-width: 480px) {
+          .usage-container {
+            width: 100%;
+            margin-bottom: 12px;
+          }
+        }
       </style>
     </head>
     <body>
@@ -485,52 +647,89 @@ function getWebviewContent(usageData, accountInfo) {
         </span>
       </div>
       
-      <div class="usage-container">
-        <div class="usage-title gpt4-title">Premium模型使用量 (GPT-4)</div>
-        <div class="progress-bar">
-          <div class="progress-fill ${gpt4ColorClass}" style="width: ${gpt4Percentage}%"></div>
+      <div class="cards-container">
+        <div class="usage-container">
+          <div class="usage-title gpt4-title">Premium使用量 (GPT-4)</div>
+          <div class="circle-progress">
+            <div class="circle-bg"></div>
+            <div class="circle-fill ${gpt4ColorClass}" style="transform: rotate(${Math.min(gpt4Percentage * 3.6, 360)}deg)"></div>
+            ${gpt4Percentage > 50 ? `<div class="circle-mask">
+              <div class="circle-fill ${gpt4ColorClass}" style="transform: rotate(${Math.min((gpt4Percentage - 50) * 3.6, 180)}deg)"></div>
+            </div>` : ''}
+            <div class="circle-inner">
+              <div class="usage-number">${gpt4Used}</div>
+              <div class="usage-total">总量: ${gpt4Total}</div>
+            </div>
+          </div>
+          <div class="tokens-info">
+            已使用Token数: ${gpt4Tokens.toLocaleString()}
+          </div>
         </div>
-        <div class="usage-details">
-          <span>已使用: ${gpt4Used}</span>
-          <span>总量: ${gpt4Total}</span>
+        
+        <div class="usage-container">
+          <div class="usage-title gpt35-title">Unlimited使用量(GPT-3.5-Turbo)</div>
+          <div class="circle-progress">
+            <div class="circle-bg"></div>
+            ${isUnlimited ? 
+              `<div class="circle-fill success" style="transform: rotate(${Math.min(5, 360)}deg)"></div>` : 
+              `<div class="circle-fill success" style="transform: rotate(${Math.min(gpt35Percentage * 3.6, 360)}deg)"></div>
+               ${gpt35Percentage > 50 ? `<div class="circle-mask">
+                 <div class="circle-fill success" style="transform: rotate(${Math.min((gpt35Percentage - 50) * 3.6, 180)}deg)"></div>
+               </div>` : ''}`
+            }
+            <div class="circle-inner">
+              <div class="usage-number">${gpt35Used}</div>
+              <div class="usage-total">总量: ${isUnlimited ? '<span class="infinite-symbol">∞</span>' : gpt35Total}</div>
+            </div>
+          </div>
+          <div class="tokens-info">
+            已使用Token数: ${gpt35Tokens.toLocaleString()}
+          </div>
         </div>
-        <div class="tokens-info">
-          已使用Token数: ${gpt4Tokens.toLocaleString()}
-        </div>
-      </div>
-      
-      <div class="usage-container">
-        <div class="usage-title gpt35-title">无限额请求使用量 (GPT-3.5-Turbo)</div>
-        <div class="progress-bar">
-          <div class="progress-fill ${isUnlimited ? 'unlimited' : ''}" style="width: ${gpt35Percentage}%"></div>
-        </div>
-        <div class="usage-details">
-          <span>已使用: ${gpt35Used}</span>
-          <span>总量: ${isUnlimited ? '<span class="infinite-symbol">∞</span>' : gpt35Total}</span>
-        </div>
-        <div class="tokens-info">
-          已使用Token数: ${gpt35Tokens.toLocaleString()}
-        </div>
-      </div>
-      
-      <div class="usage-container">
-        <div class="usage-title gpt32k-title">GPT-4-32K使用量</div>
-        <div class="progress-bar">
-          <div class="progress-fill" style="width: ${gpt432kPercentage}%"></div>
-        </div>
-        <div class="usage-details">
-          <span>已使用: ${gpt432kUsed}</span>
-          <span>总量: ${gpt432kTotal}</span>
-        </div>
-        <div class="tokens-info">
-          已使用Token数: ${gpt432kTokens.toLocaleString()}
+        
+        <div class="usage-container">
+          <div class="usage-title gpt32k-title">GPT-4-32K使用量</div>
+          <div class="circle-progress">
+            <div class="circle-bg"></div>
+            <div class="circle-fill success" style="transform: rotate(${Math.min(gpt432kPercentage * 3.6, 360)}deg); ${gpt432kUsed === 0 ? 'display: none;' : ''}" ></div>
+            ${gpt432kPercentage > 50 ? `<div class="circle-mask">
+              <div class="circle-fill success" style="transform: rotate(${Math.min((gpt432kPercentage - 50) * 3.6, 180)}deg); ${gpt432kUsed === 0 ? 'display: none;' : ''}"></div>
+            </div>` : ''}
+            <div class="circle-inner">
+              <div class="usage-number">${gpt432kUsed}</div>
+              <div class="usage-total">总量: ${gpt432kTotal}</div>
+            </div>
+          </div>
+          <div class="tokens-info">
+            已使用Token数: ${gpt432kTokens.toLocaleString()}
+          </div>
         </div>
       </div>
       
       <div class="reset-info">
-        <div>下次重置日期: ${resetDateStr}</div>
-        <div>最后更新时间: ${new Date().toLocaleString('zh-CN')}</div>
+        <button class="refresh-button" onclick="refreshData()">
+          <span class="refresh-button-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+              <path d="M17.65 6.35A8 8 0 1 0 19.73 14h-2.08a6 6 0 1 1-1.43-6.22L13 11h7V4l-2.35 2.35z"/>
+            </svg>
+          </span>
+          刷新
+        </button>
+        <div class="dates-info">
+          <div>下次重置日期: ${resetDateStr}</div>
+          <div>最后更新时间: ${new Date().toLocaleString('zh-CN')}</div>
+        </div>
       </div>
+      
+      <script>
+        function refreshData() {
+          // 通知 VSCode 扩展刷新数据
+          const vscode = acquireVsCodeApi();
+          vscode.postMessage({
+            command: 'refresh'
+          });
+        }
+      </script>
     </body>
     </html>
   `;

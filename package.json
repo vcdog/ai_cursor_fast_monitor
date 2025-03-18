@@ -2,7 +2,7 @@
   "name": "cursor-usage-monitor",
   "displayName": "Cursor用量监控",
   "description": "监控您的 Cursor AI 使用情况",
-  "version": "0.0.21",
+  "version": "0.0.30",
   "publisher": "vcdog",
   "icon": "images/icon.png",
   "author": {
