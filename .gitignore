@@ -5,3 +5,8 @@ node_modules
 *.vsix
 .DS_Store 
 .vscode-token
+.git-token
+.git-token.cmd
+.git-token.sh
+.git-token.bat
+.git-token.ps1

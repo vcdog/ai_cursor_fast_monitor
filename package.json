@@ -10,7 +10,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/vcdog/cursor-usage-monitor"
+    "url": "https://github.com/vcdog/ai_cursor_fast_monitor"
   },
   "engines": {
     "vscode": "^1.60.0"
@@ -50,7 +50,7 @@
         },
         "cursor-usage-monitor.checkInterval": {
           "type": "number",
-          "default": 3600,
+          "default": 600,
           "description": "自动检查间隔（秒）"
         }
       }
@@ -58,6 +58,8 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
+    "release": "node src/package-optimized.js",
+    "upload-history": "node src/upload-historical-releases.js",
     "compile": "webpack",
     "watch": "webpack --watch",
     "package": "webpack --mode production --devtool hidden-source-map",
@@ -69,7 +71,9 @@
     "test": "jest"
   },
   "dependencies": {
+    "@octokit/rest": "^18.12.0",
     "axios": "^0.24.0",
+    "glob": "^7.2.3",
     "react": "^17.0.2",
     "react-dom": "^17.0.2"
   },
