@@ -53,5 +53,9 @@
 3. 在VSCode中按F5启动调试
 
 ## 许可证
-
 MIT
+<center>
+    <img src="https://pub-5f6bced249fd4b579e546a841920c402.r2.dev/ai_scryt_garden_logo.png" style="width: 200px;">
+</center>
+**点击上方🔺公众号🔺关注我✅**
+
